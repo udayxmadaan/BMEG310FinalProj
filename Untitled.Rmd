@@ -7,7 +7,7 @@ output: html_document
 
 
 ```{r}
-#import data 
+#import data
 data_clinical_patient = read.csv("data_clinical_patient.txt", sep = '\t', 
                                  header = FALSE)
 data_mutations = read.csv("data_mutations.txt", sep = '\t', header = TRUE)
@@ -55,7 +55,7 @@ RNAseq_filtered <- RNAseq[, columns_to_keep]
 
 
 ```{r}
-#filter clinical data
+#Filter clinical data
 rows_to_keep = sapply(data_clinical_patient$V1, function(x) 
   any(sapply(commonPatients, function(y) grepl(y, substr(x, 1, 12)))), 
   USE.NAMES = FALSE)
