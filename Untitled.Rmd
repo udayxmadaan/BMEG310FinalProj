@@ -7,7 +7,7 @@ output: html_document
 
 
 ```{r}
-#import data
+#import data 
 data_clinical_patient = read.csv("data_clinical_patient.txt", sep = '\t', 
                                  header = FALSE)
 data_mutations = read.csv("data_mutations.txt", sep = '\t', header = TRUE)
