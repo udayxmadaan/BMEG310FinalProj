@@ -62,3 +62,8 @@ rows_to_keep = sapply(data_clinical_patient$V1, function(x)
 rows_to_keep[1:5]=TRUE
 data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
 ```
+
+```{r}
+rows_to_keep
+```
+
