@@ -63,7 +63,40 @@ rows_to_keep[1:5]=TRUE
 data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
 ```
 
+
 ```{r}
-rows_to_keep
+# EXPRESSION ANALYSIS
+#RNAseq_filtered
 ```
+
+
+```{r}
+# MUTATION ANALYSIS
+#data_mutations_filtered
+
+possibleMutations = unique(data_mutations_filtered$Variant_Classification)
+
+#mutationType is a single string from possibleMutation
+#mutation_data is the data_mutations_filtered
+output = function(mutation_data, mutationType){
+  
+  # get patient ID
+  rows = which(mutation_data$Variant_Classification == mutationType)
+  patientIDs = substr(mutation_data$Tumor_Sample_Barcode[rows], 1, 12)
+  
+  
+  # create a dataframes
+  
+  
+}
+```
+
+
+```{r}
+# CLINICAL ANALYSIS
+#data_clinical_patient_filtered
+
+
+```
+
 
