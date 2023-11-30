@@ -148,7 +148,13 @@ res <- pheatmap(mutationMatrix1[1:numOfGenes,],
 
 ```{r}
 # CLINICAL ANALYSIS
-#data_clinical_patient_filtered
+
+#hypothesis males over 60 are more likely to have renal cell cancer
+HypothesisRows = which(data_clinical_patient_filtered$V6 == "Male" && data_clinical_patient_filtered$V5 > 60)
+
+clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
+
+
 
 
 ```
