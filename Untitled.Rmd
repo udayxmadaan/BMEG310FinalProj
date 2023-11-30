@@ -80,14 +80,14 @@ data_mutations_filtered$Hugo_Symbol
 
 mutation_data = data_mutations_filtered
 
-mutationType = possibleMutations[1]
+mutationType = possibleMutations[3:17]
 
 #mutationType is a single string from possibleMutation
 #mutation_data is the data_mutations_filtered
-#mutationMatrixGenerator = function(mutation_data, mutationType){
+mutationMatrixGenerator = function(mutation_data, mutationType){
   
   # get patient IDs
-  rows = which(mutation_data$Variant_Classification == mutationType)
+  rows = which(mutation_data$Variant_Classification %in% mutationType)
   patientIDs = toString(unique(substr(mutation_data$Tumor_Sample_Barcode[rows], 1, 12)))
   
   # get mutations
@@ -107,7 +107,7 @@ mutationType = possibleMutations[1]
   colnames(df) = patientIDs
   rownames(df) = genes
   
-  mutation_indices <- which(mutation_data$Variant_Classification == mutationType)
+  mutation_indices <- which(mutation_data$Variant_Classification %in% mutationType)
   
   for (i in mutation_indices) {
   geneForMutation <- mutation_data$Hugo_Symbol[i]
@@ -122,6 +122,26 @@ mutationType = possibleMutations[1]
     row_sums = rowSums(df)
     sorted_indices = order(row_sums, decreasing = TRUE)
     df = df[sorted_indices, ]
+    return(df)
+}
+
+mutationMatrix1 = mutationMatrixGenerator(data_mutations_filtered, mutationType )
+```
+
+
+```{r}
+library(pheatmap)
+row_sums <- rowSums(mutationMatrix1)
+
+numOfGenes = 10
+
+# Create a bar plot of row sums
+barplot(row_sums[1:numOfGenes], names.arg = rownames(mutationMatrix1)[1:numOfGenes], xlab = "Row Names", ylab = "Sum", main = "Sum of Rows")
+
+
+res <- pheatmap(mutationMatrix1[1:numOfGenes,],
+         cluster_rows = F,
+         show_colnames=FALSE)
 ```
 
 
