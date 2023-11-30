@@ -1,0 +1,162 @@
+---
+title: "Untitled"
+author: "Uday Madaan"
+date: "2023-11-23"
+output: html_document
+---
+
+
+```{r}
+#import data
+data_clinical_patient = read.csv("data_clinical_patient.txt", sep = '\t', 
+                                 header = FALSE)
+data_mutations = read.csv("data_mutations.txt", sep = '\t', header = TRUE)
+RNAseq = read.csv("RNAseq_KIRC.csv", sep = ',', header = FALSE)
+```
+
+
+
+```{r}
+clinicalPatients = unique(data_clinical_patient[6:nrow(data_clinical_patient),
+                                                1])
+
+mutationPatients = data_mutations[1:nrow(data_mutations),17]
+mutationPatients = substr(mutationPatients, 1, 12)
+mutationPatients = unique(mutationPatients)
+
+RNApatients = RNAseq[1,2:ncol(RNAseq)]
+RNApatients = substr(RNApatients, 1, 12)
+RNApatients = unique(RNApatients)
+
+commonPatients <- Reduce(intersect, list(clinicalPatients, mutationPatients, 
+                                         RNApatients))
+```
+
+
+```{r}
+# Filter data mutations to keep the common patient IDs
+data_mutations_filtered <- data_mutations[sapply(
+  data_mutations$Tumor_Sample_Barcode, function(x) any(sapply(commonPatients, 
+                function(y) grepl(y, substr(x, 1, 12)))), USE.NAMES = FALSE), ]
+
+```
+
+
+
+```{r}
+# Filter RNAseq to keep the common patient IDs
+columns_to_keep <- sapply(RNAseq, function(col) {
+  any(sapply(commonPatients, function(match) grepl(match, 
+                                                substr(col[1], 1, 12))))})
+columns_to_keep[1]=TRUE
+RNAseq_filtered <- RNAseq[, columns_to_keep]
+```
+
+
+
+```{r}
+#Filter clinical data
+rows_to_keep = sapply(data_clinical_patient$V1, function(x) 
+  any(sapply(commonPatients, function(y) grepl(y, substr(x, 1, 12)))), 
+  USE.NAMES = FALSE)
+rows_to_keep[1:5]=TRUE
+data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
+```
+
+
+```{r}
+# EXPRESSION ANALYSIS
+#RNAseq_filtered
+```
+
+
+```{r}
+# MUTATION ANALYSIS
+#data_mutations_filtered
+
+possibleMutations = unique(data_mutations_filtered$Variant_Classification)
+
+data_mutations_filtered$Hugo_Symbol
+
+mutation_data = data_mutations_filtered
+
+mutationType = possibleMutations[3:17]
+
+#mutationType is a single string from possibleMutation
+#mutation_data is the data_mutations_filtered
+mutationMatrixGenerator = function(mutation_data, mutationType){
+  
+  # get patient IDs
+  rows = which(mutation_data$Variant_Classification %in% mutationType)
+  patientIDs = toString(unique(substr(mutation_data$Tumor_Sample_Barcode[rows], 1, 12)))
+  
+  # get mutations
+  genes = toString(unique(mutation_data$Hugo_Symbol))
+  
+  
+  # break up the long strings since the IDs and genes are all combined into 1 
+  # string
+  genes = strsplit(genes, ", ")[[1]]
+  patientIDs = strsplit(patientIDs, ", ")[[1]]
+  
+  
+  # create an empty dataframe
+  df <- data.frame(matrix(0, nrow = length(genes), ncol = length(patientIDs)))
+  
+  # assign names to rows and columns
+  colnames(df) = patientIDs
+  rownames(df) = genes
+  
+  mutation_indices <- which(mutation_data$Variant_Classification %in% mutationType)
+  
+  for (i in mutation_indices) {
+  geneForMutation <- mutation_data$Hugo_Symbol[i]
+  geneRow <- which(geneForMutation == genes)
+  patientID <- substr(mutation_data$Tumor_Sample_Barcode[i], 1, 12)
+  
+  # Assign value 1 using matrix indexing
+  df[geneRow, patientID] <- 1
+  }
+  
+   # sort the rows based on the most frequency genes that get mutated
+    row_sums = rowSums(df)
+    sorted_indices = order(row_sums, decreasing = TRUE)
+    df = df[sorted_indices, ]
+    return(df)
+}
+
+mutationMatrix1 = mutationMatrixGenerator(data_mutations_filtered, mutationType )
+```
+
+
+```{r}
+library(pheatmap)
+row_sums <- rowSums(mutationMatrix1)
+
+numOfGenes = 10
+
+# Create a bar plot of row sums
+barplot(row_sums[1:numOfGenes], names.arg = rownames(mutationMatrix1)[1:numOfGenes], xlab = "Row Names", ylab = "Sum", main = "Sum of Rows")
+
+
+res <- pheatmap(mutationMatrix1[1:numOfGenes,],
+         cluster_rows = F,
+         show_colnames=FALSE)
+```
+
+
+
+```{r}
+# CLINICAL ANALYSIS
+
+#hypothesis males over 60 are more likely to have renal cell cancer
+HypothesisRows = which(data_clinical_patient_filtered$V6 == "Male" && data_clinical_patient_filtered$V5 > 60)
+
+clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
+
+
+
+
+```
+
+
