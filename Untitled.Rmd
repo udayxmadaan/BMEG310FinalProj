@@ -76,20 +76,54 @@ data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
 
 possibleMutations = unique(data_mutations_filtered$Variant_Classification)
 
+data_mutations_filtered$Hugo_Symbol
+
+mutation_data = data_mutations_filtered
+
+mutationType = possibleMutations[1]
+
 #mutationType is a single string from possibleMutation
 #mutation_data is the data_mutations_filtered
-output = function(mutation_data, mutationType){
+#mutationMatrixGenerator = function(mutation_data, mutationType){
   
-  # get patient ID
+  # get patient IDs
   rows = which(mutation_data$Variant_Classification == mutationType)
-  patientIDs = substr(mutation_data$Tumor_Sample_Barcode[rows], 1, 12)
+  patientIDs = toString(unique(substr(mutation_data$Tumor_Sample_Barcode[rows], 1, 12)))
+  
+  # get mutations
+  genes = toString(unique(mutation_data$Hugo_Symbol))
   
   
-  # create a dataframes
+  # break up the long strings since the IDs and genes are all combined into 1 
+  # string
+  genes = strsplit(genes, ", ")[[1]]
+  patientIDs = strsplit(patientIDs, ", ")[[1]]
   
   
-}
+  # create an empty dataframe
+  df <- data.frame(matrix(0, nrow = length(genes), ncol = length(patientIDs)))
+  
+  # assign names to rows and columns
+  colnames(df) = patientIDs
+  rownames(df) = genes
+  
+  mutation_indices <- which(mutation_data$Variant_Classification == mutationType)
+  
+  for (i in mutation_indices) {
+  geneForMutation <- mutation_data$Hugo_Symbol[i]
+  geneRow <- which(geneForMutation == genes)
+  patientID <- substr(mutation_data$Tumor_Sample_Barcode[i], 1, 12)
+  
+  # Assign value 1 using matrix indexing
+  df[geneRow, patientID] <- 1
+  }
+  
+   # sort the rows based on the most frequency genes that get mutated
+    row_sums = rowSums(df)
+    sorted_indices = order(row_sums, decreasing = TRUE)
+    df = df[sorted_indices, ]
 ```
+
 
 
 ```{r}
