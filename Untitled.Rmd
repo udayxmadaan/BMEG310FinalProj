@@ -133,7 +133,7 @@ mutationMatrix1 = mutationMatrixGenerator(data_mutations_filtered, mutationType 
 library(pheatmap)
 row_sums <- rowSums(mutationMatrix1)
 
-numOfGenes = 10
+numOfGenes = 5
 
 # Create a bar plot of row sums
 barplot(row_sums[1:numOfGenes], names.arg = rownames(mutationMatrix1)[1:numOfGenes], xlab = "Row Names", ylab = "Sum", main = "Sum of Rows")

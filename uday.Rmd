@@ -71,77 +71,66 @@ data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
 
 
 ```{r}
-# MUTATION ANALYSIS
-#data_mutations_filtered
-
-possibleMutations = unique(data_mutations_filtered$Variant_Classification)
-
-data_mutations_filtered$Hugo_Symbol
-
-mutation_data = data_mutations_filtered
-
-mutationType = possibleMutations[3:17]
-
-#mutationType is a single string from possibleMutation
-#mutation_data is the data_mutations_filtered
-mutationMatrixGenerator = function(mutation_data, mutationType){
-  
-  # get patient IDs
-  rows = which(mutation_data$Variant_Classification %in% mutationType)
-  patientIDs = toString(unique(substr(mutation_data$Tumor_Sample_Barcode[rows], 1, 12)))
-  
-  # get mutations
-  genes = toString(unique(mutation_data$Hugo_Symbol))
-  
-  
-  # break up the long strings since the IDs and genes are all combined into 1 
-  # string
-  genes = strsplit(genes, ", ")[[1]]
-  patientIDs = strsplit(patientIDs, ", ")[[1]]
-  
-  
-  # create an empty dataframe
-  df <- data.frame(matrix(0, nrow = length(genes), ncol = length(patientIDs)))
-  
-  # assign names to rows and columns
-  colnames(df) = patientIDs
-  rownames(df) = genes
-  
-  mutation_indices <- which(mutation_data$Variant_Classification %in% mutationType)
-  
-  for (i in mutation_indices) {
-  geneForMutation <- mutation_data$Hugo_Symbol[i]
-  geneRow <- which(geneForMutation == genes)
-  patientID <- substr(mutation_data$Tumor_Sample_Barcode[i], 1, 12)
-  
-  # Assign value 1 using matrix indexing
-  df[geneRow, patientID] <- 1
-  }
-  
-   # sort the rows based on the most frequency genes that get mutated
-    row_sums = rowSums(df)
-    sorted_indices = order(row_sums, decreasing = TRUE)
-    df = df[sorted_indices, ]
-    return(df)
-}
-
-mutationMatrix1 = mutationMatrixGenerator(data_mutations_filtered, mutationType )
+hugo <- as.data.frame(table(data_mutations$Hugo_Symbol))
+hugo.ordered <- hugo[order(-hugo$Freq),]
+ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 45,hjust=1))+
+  scale_x_discrete(limits = hugo.ordered[1:15,]$Var1)
 ```
 
 
+Oncomat Matrix
 ```{r}
-library(pheatmap)
-row_sums <- rowSums(mutationMatrix1)
+cnv_events = unique(data_mutations$Variant_Classification)
+oncomat = reshape2::dcast(
+  data = data_mutations,
+  formula = Hugo_Symbol ~ Tumor_Sample_Barcode,
+  fun.aggregate = function(x, cnv = cnv_events) {
+    x = as.character(x) # >= 2 same/distinct variant classification = Multi_Hit
+    xad = x[x %in% cnv]
+    xvc = x[!x %in% cnv]
+    
+    if (length(xvc) > 0) {
+      xvc = ifelse(test = length(xvc) > 1,
+                   yes = 'Multi_Hit',
+                   no = xvc)
+    }
+    
+    x = ifelse(
+      test = length(xad) > 0,
+      yes = paste(xad, xvc, sep = ';'),
+      no = xvc
+    )
+    x = gsub(pattern = ';$',
+             replacement = '',
+             x = x)
+    x = gsub(pattern = '^;',
+             replacement = '',
+             x = x)
+    return(x)
+  },
+  value.var = 'Variant_Classification',
+  fill = '',
+  drop = FALSE
+)
+rownames(oncomat) = oncomat$Hugo_Symbol
+oncomat <- oncomat[,-1]
+oncomat.ordered <- oncomat[order(-hugo$Freq),]
+mat <- oncomat.ordered
+mat[mat!=""]=1
+mat[mat==""]=0
+mat <- apply(mat, 2 ,as.numeric)
+mat <- as.matrix(mat)
+rownames(mat)  <-  row.names(oncomat.ordered)
+```
 
-numOfGenes = 10
-
-# Create a bar plot of row sums
-barplot(row_sums[1:numOfGenes], names.arg = rownames(mutationMatrix1)[1:numOfGenes], xlab = "Row Names", ylab = "Sum", main = "Sum of Rows")
-
-
-res <- pheatmap(mutationMatrix1[1:numOfGenes,],
+```{r}
+reduce.mat <- mat[1:5,]
+res <- pheatmap(reduce.mat,
          cluster_rows = F,
          show_colnames=FALSE)
+cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 ```
 
 
@@ -154,40 +143,68 @@ res <- pheatmap(mutationMatrix1[1:numOfGenes,],
 HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 60)
 HypothesisRows = HypothesisRows + 5
 clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
+
+rows = which(substr(mutation_data$Tumor_Sample_Barcode, 1, 12) %in% unique(clinicalHypothesis$V1))
+
+mutationHypothesis = mutation_data[rows,]
+
+
+
+cnv_events = unique(mutationHypothesis$Variant_Classification)
+oncomat = reshape2::dcast(
+  data = mutationHypothesis,
+  formula = Hugo_Symbol ~ Tumor_Sample_Barcode,
+  fun.aggregate = function(x, cnv = cnv_events) {
+    x = as.character(x) # >= 2 same/distinct variant classification = Multi_Hit
+    xad = x[x %in% cnv]
+    xvc = x[!x %in% cnv]
+    
+    if (length(xvc) > 0) {
+      xvc = ifelse(test = length(xvc) > 1,
+                   yes = 'Multi_Hit',
+                   no = xvc)
+    }
+    
+    x = ifelse(
+      test = length(xad) > 0,
+      yes = paste(xad, xvc, sep = ';'),
+      no = xvc
+    )
+    x = gsub(pattern = ';$',
+             replacement = '',
+             x = x)
+    x = gsub(pattern = '^;',
+             replacement = '',
+             x = x)
+    return(x)
+  },
+  value.var = 'Variant_Classification',
+  fill = '',
+  drop = FALSE
+)
+rownames(oncomat) = oncomat$Hugo_Symbol
+oncomat <- oncomat[,-1]
+mat = oncomat
+#oncomat.ordered <- oncomat[order(-hugo$Freq),]
+#mat <- oncomat.ordered
+mat[mat!="" & mat!="Missense_Mutation" & mat!="Nonsense_Mutation"]=1
+mat[mat=="" | mat=="Missense_Mutation" | mat=="Nonsense_Mutation"]=0
+
+
+mat <- apply(mat, 2 ,as.numeric)
+row_sums = rowSums(mat)
+sorted_indices = order(row_sums, decreasing = TRUE)
+mat = mat[sorted_indices, ]
+
+mat <- as.matrix(mat)
+rownames(mat)  <-  row.names(oncomat$Hugo_Symbol[sorted_indices])
+
+reduce.mat <- mat[1:5,]
+res <- pheatmap(reduce.mat,
+         cluster_rows = F,
+         show_colnames=FALSE)
+cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 ```
 
-
-```{r}
-# take the top genes
-# cluster the 
-library(devtools)
-library(ggbiplot)
-
-
-
-# Assuming you've performed K-means clustering and have cluster assignments in `patient_data`
-
-# Perform PCA for dimensionality reduction
-pca_result <- prcomp(data_clinical_patient_filtered, scale. = FALSE)  # You might want to use scaled data
-
-# Extract the first two principal components
-pca_data <- as.data.frame(pca_result$x[, 1:2])
-
-# Add cluster assignments to the PCA data
-pca_data$cluster <- patient_data$cluster
-
-# Plot the clusters
-library(ggplot2)
-
-ggplot(pca_data, aes(PC1, PC2, color = factor(cluster))) +
-  geom_point() +
-  labs(title = "K-means Clustering of Patient Data (PCA)", x = "Principal Component 1", y = "Principal Component 2") +
-  scale_color_discrete(name = "Cluster")
-
-
-
-
-
-```
 
 
