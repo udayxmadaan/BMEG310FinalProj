@@ -9,6 +9,10 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
 library(ggplot2)
 library(pheatmap)
+library(survival)
+library("survminer")
+library("SummarizedExperiment")
+library("TCGAbiolinks")
 ```
 
 ## Mutation Analysis
@@ -19,7 +23,7 @@ hugo <- as.data.frame(table(data_mutations$Hugo_Symbol))
 hugo.ordered <- hugo[order(-hugo$Freq),]
 ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
   geom_col()+
-  theme(axis.text.x = element_text(angle = 45,hjust=1))+
+  theme(axis.text.x = element_text(angle = 45,hjust=1))+ 
   scale_x_discrete(limits = hugo.ordered[1:15,]$Var1)
 ```
 
@@ -62,8 +66,8 @@ rownames(oncomat) = oncomat$Hugo_Symbol
 oncomat <- oncomat[,-1]
 oncomat.ordered <- oncomat[order(-hugo$Freq),]
 mat <- oncomat.ordered
-mat[mat!=""]=1
-mat[mat==""]=0
+mat[mat!="" & mat!="Missense_Mutation" & mat!="Nonsense_Mutation"]=1
+mat[mat=="" | mat=="Missense_Mutation" | mat=="Nonsense_Mutation"]=0
 mat <- apply(mat, 2 ,as.numeric)
 mat <- as.matrix(mat)
 rownames(mat)  <-  row.names(oncomat.ordered)
@@ -74,5 +78,9 @@ res <- pheatmap(reduce.mat,
          cluster_rows = F,
          show_colnames=FALSE)
 cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
+```
+##Survival Analaysis
+```{r}
+
 ```
 
