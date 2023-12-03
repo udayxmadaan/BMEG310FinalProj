@@ -186,8 +186,8 @@ rnames =  oncomat$Hugo_Symbol
 rownames(oncomat) = rnames
 oncomat <- oncomat[,-1]
 mat = oncomat
-#oncomat.ordered <- oncomat[order(-hugo$Freq),]
-#mat <- oncomat.ordered
+
+
 mat[mat!="" & mat!="Missense_Mutation" & mat!="Nonsense_Mutation"]=1
 mat[mat=="" | mat=="Missense_Mutation" | mat=="Nonsense_Mutation"]=0
 
@@ -205,6 +205,49 @@ res <- pheatmap(reduce.mat,
          show_colnames=FALSE, show_rownames = TRUE)
 cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 ```
+
+
+```{r}
+library("survival")
+library("survminer")
+clinicalFilteredCrop = data_clinical_patient_filtered[6:359,]
+colnames(clinicalFilteredCrop) = data_clinical_patient_filtered[5,]
+
+clinicalFilteredCrop$OS_STATUS = ifelse(clinicalFilteredCrop$OS_STATUS == "0:LIVING", "Alive", "Dead")
+clinicalFilteredCrop$deceased = clinicalFilteredCrop$OS_STATUS == "Dead"
+clinicalFilteredCrop$MONTHS_TO_BIRTH = abs(as.numeric(clinicalFilteredCrop$DAYS_TO_BIRTH)/30)
+clinicalFilteredCrop$DSS_MONTHS = as.numeric(clinicalFilteredCrop$DSS_MONTHS )
+
+
+
+HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 60)
+HypothesisRows = HypothesisRows + 5
+clinicalHypothesisIDs = data_clinical_patient_filtered$V1[HypothesisRows]
+
+
+clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == "Dead",
+                                   clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$DSS_MONTHS)
+
+
+rowsMatchID = which(clinicalFilteredCrop$PATIENT_ID %in% clinicalHypothesisIDs)
+clinicalFilteredCrop$HypothesisGroup = numeric(length(clinicalFilteredCrop$PATIENT_ID))
+clinicalFilteredCrop$HypothesisGroup[rowsMatchID] = 1
+
+fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop)
+
+print(fit)
+ggsurvplot(fit, data=clinicalFilteredCrop, pval = T)
+
+
+
+```
+
+
+
+
+
+
+
 
 
 
