@@ -182,7 +182,8 @@ oncomat = reshape2::dcast(
   fill = '',
   drop = FALSE
 )
-rownames(oncomat) = oncomat$Hugo_Symbol
+rnames =  oncomat$Hugo_Symbol
+rownames(oncomat) = rnames
 oncomat <- oncomat[,-1]
 mat = oncomat
 #oncomat.ordered <- oncomat[order(-hugo$Freq),]
@@ -195,14 +196,13 @@ mat <- apply(mat, 2 ,as.numeric)
 row_sums = rowSums(mat)
 sorted_indices = order(row_sums, decreasing = TRUE)
 mat = mat[sorted_indices, ]
-
 mat <- as.matrix(mat)
-rownames(mat)  <-  row.names(oncomat$Hugo_Symbol[sorted_indices])
+rownames(mat)  <- rnames[sorted_indices]
 
 reduce.mat <- mat[1:5,]
 res <- pheatmap(reduce.mat,
          cluster_rows = F,
-         show_colnames=FALSE)
+         show_colnames=FALSE, show_rownames = TRUE)
 cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 ```
 
