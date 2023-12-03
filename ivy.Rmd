@@ -1,0 +1,206 @@
+---
+title: "ivy"
+author: "Ivy Wu 85658672"
+date: "2023-12-03"
+output: html_document
+---
+
+
+
+```{r}
+#import data
+data_clinical_patient = read.csv("data_clinical_patient.txt", sep = '\t', 
+                                 header = FALSE)
+data_mutations = read.csv("data_mutations.txt", sep = '\t', header = TRUE)
+RNAseq = read.csv("RNAseq_KIRC.csv", sep = ',', header = FALSE)
+```
+
+
+
+```{r}
+clinicalPatients = unique(data_clinical_patient[6:nrow(data_clinical_patient),
+                                                1])
+
+mutationPatients = data_mutations[1:nrow(data_mutations),17]
+mutationPatients = substr(mutationPatients, 1, 12)
+mutationPatients = unique(mutationPatients)
+
+RNApatients = RNAseq[1,2:ncol(RNAseq)]
+RNApatients = substr(RNApatients, 1, 12)
+RNApatients = unique(RNApatients)
+
+commonPatients <- Reduce(intersect, list(clinicalPatients, mutationPatients, 
+                                         RNApatients))
+```
+
+
+```{r}
+# Filter data mutations to keep the common patient IDs
+data_mutations_filtered <- data_mutations[sapply(
+  data_mutations$Tumor_Sample_Barcode, function(x) any(sapply(commonPatients, 
+                function(y) grepl(y, substr(x, 1, 12)))), USE.NAMES = FALSE), ]
+
+```
+
+
+
+```{r}
+# Filter RNAseq to keep the common patient IDs
+columns_to_keep <- sapply(RNAseq, function(col) {
+  any(sapply(commonPatients, function(match) grepl(match, 
+                                                substr(col[1], 1, 12))))})
+columns_to_keep[1]=TRUE
+RNAseq_filtered <- RNAseq[, columns_to_keep]
+```
+
+
+
+```{r}
+#Filter clinical data
+rows_to_keep = sapply(data_clinical_patient$V1, function(x) 
+  any(sapply(commonPatients, function(y) grepl(y, substr(x, 1, 12)))), 
+  USE.NAMES = FALSE)
+rows_to_keep[1:5]=TRUE
+data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
+```
+
+**Mutation Data Clustering**
+```{r}
+#libraries
+
+library(devtools)
+library(ggbiplot)
+library(stats)
+
+```
+
+```{r}
+#First, i want to convert the variant type into a binary data since SNP = Single Nucleotide Polymorphism, which is a variation at a single position in a DNA sequence among individuals. DEL represents a deletion, which is a type of mutation where a section of DNA is lost or deleted. As it may provide meangingful insights for the analysis. 
+
+data_mutations_filtered$SNP <- as.integer(
+  data_mutations_filtered$Variant_Type == "SNP")
+
+data_mutations_filtered$DEL <- as.integer(
+  data_mutations_filtered$Variant_Type == "DEL")
+```
+
+```{r}
+mutation_numeric_data <- data_mutations_filtered[, 
+                                                 sapply(data_mutations_filtered, is.numeric)]
+
+#since hotspot column is observed to be all 0, position protein contains NA, and n_alt_count is binary data
+mutation_numeric_data <- subset(mutation_numeric_data, select = -c(Hotspot, Protein_position, n_alt_count))
+
+finite_rows <- apply(mutation_numeric_data, 1, function(x) all(is.finite(x)))
+
+mutation_numeric_data <- mutation_numeric_data[finite_rows, ]
+
+mutation_scaled <- scale(mutation_numeric_data)
+
+mutation.pca <- prcomp(mutation_scaled, center = TRUE, scale. = TRUE)
+
+# Viewing summary of PCA results
+summary(mutation.pca)
+
+# Plotting the first two principal components (for visualization)
+plot(mutation.pca$x[,1], mutation.pca$x[,2])
+
+```
+
+```{r}
+cumulative_variance <- cumsum(mutation.pca$sdev^2) / sum(mutation.pca$sdev^2)
+
+plot(cumulative_variance, xlab = "Number of Principal Components", ylab = "Cumulative Proportion of Variance Explained", type = "b")
+
+```
+Thus, using the first two or three principal components would be sufficient.
+
+```{r}
+#performing Elbow plot - Within-Cluster Sum of Squares, WCSS
+wcss <- vector()
+for (i in 1:10) {
+  set.seed(111)
+  kmeans_result <- kmeans(mutation.pca$x, centers = i)
+  wcss[i] <- kmeans_result$tot.withinss
+}
+
+plot(1:10, wcss, type = "b", col = "blue", xlab = "Number of Clusters", ylab = "WCSS")
+
+```
+The WCSS decreases rapidly as the number of clusters increases from 2 to 4 and then begins to level off after around 4 clusters. The "elbow" seems to be between 3 and 4 clusters, suggesting that after this point, adding more clusters does not contribute significantly to capturing more structure in the data.
+
+```{r}
+# Perform k-means clustering using the first few principal components
+#FIRST: use the first two principal with 3 cluters
+#SECOND: use the first two principal with 4 cluters
+#THIRD: use the first three principal with 3 cluters
+#FOURTH: use the first three principal with 4 cluters
+```
+
+
+```{r}
+#FIRST
+set.seed(111)
+kmeans_result <- kmeans(mutation.pca$x[, 1:2], centers = 3)
+
+print(kmeans_result)
+
+library(ggplot2)
+
+pc1 <- mutation.pca$x[, 1]
+pc2 <- mutation.pca$x[, 2]
+
+plot_df <- data.frame(PC1 = pc1, PC2 = pc2, Cluster = as.factor(kmeans_result$cluster))
+
+ggplot(plot_df, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point(alpha = 0.5) +  
+  theme_minimal() +
+  labs(title = "K-means Clustering with 3 Clusters",
+       x = "Principal Component 1",
+       y = "Principal Component 2") +
+  scale_color_discrete(name = "Cluster")
+
+```
+
+```{r}
+#SECOND
+set.seed(111)
+kmeans_result <- kmeans(mutation.pca$x[, 1:2], centers = 4)
+
+print(kmeans_result)
+
+library(ggplot2)
+
+pc1 <- mutation.pca$x[, 1]
+pc2 <- mutation.pca$x[, 2]
+
+plot_df <- data.frame(PC1 = pc1, PC2 = pc2, Cluster = as.factor(kmeans_result$cluster))
+
+ggplot(plot_df, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point(alpha = 0.5) +  
+  theme_minimal() +
+  labs(title = "K-means Clustering with 4 Clusters",
+       x = "Principal Component 1",
+       y = "Principal Component 2") +
+  scale_color_discrete(name = "Cluster")
+```
+**Performing Hierarchical Clustering**
+
+```{r}
+#perform using method average
+dist_matrix <- dist(mutation_scaled, method = 'euclidean')
+
+hclust_avg <- hclust(dist_matrix, method = 'average') 
+
+plot(hclust_avg)
+```
+```{r}
+#perform using ward.D average
+dist_matrix <- dist(mutation_scaled, method = 'euclidean')
+
+hclust_avg <- hclust(dist_matrix, method = 'ward.D') 
+
+plot(hclust_avg)
+```
+
+
