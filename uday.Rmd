@@ -71,6 +71,7 @@ data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
 
 
 ```{r}
+library(ggplot2)
 hugo <- as.data.frame(table(data_mutations$Hugo_Symbol))
 hugo.ordered <- hugo[order(-hugo$Freq),]
 ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
@@ -126,6 +127,7 @@ rownames(mat)  <-  row.names(oncomat.ordered)
 ```
 
 ```{r}
+library(pheatmap)
 reduce.mat <- mat[1:5,]
 res <- pheatmap(reduce.mat,
          cluster_rows = F,
@@ -139,8 +141,7 @@ cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 # CLINICAL ANALYSIS
 
 # hypothesis males over 60 are more likely to have renal cell cancer
-
-HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 60)
+HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 74)
 HypothesisRows = HypothesisRows + 5
 clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
 
@@ -149,7 +150,7 @@ rows = which(substr(mutation_data$Tumor_Sample_Barcode, 1, 12) %in% unique(clini
 mutationHypothesis = mutation_data[rows,]
 
 
-
+# create the mutation matrix and cluster
 cnv_events = unique(mutationHypothesis$Variant_Classification)
 oncomat = reshape2::dcast(
   data = mutationHypothesis,
@@ -204,47 +205,75 @@ res <- pheatmap(reduce.mat,
          cluster_rows = F,
          show_colnames=FALSE, show_rownames = TRUE)
 cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
-```
 
 
-```{r}
+
+
 library("survival")
 library("survminer")
+
+
+# create a copy of the clinical data using only rows with actual data
 clinicalFilteredCrop = data_clinical_patient_filtered[6:359,]
 colnames(clinicalFilteredCrop) = data_clinical_patient_filtered[5,]
-
-clinicalFilteredCrop$OS_STATUS = ifelse(clinicalFilteredCrop$OS_STATUS == "0:LIVING", "Alive", "Dead")
-clinicalFilteredCrop$deceased = clinicalFilteredCrop$OS_STATUS == "Dead"
-clinicalFilteredCrop$MONTHS_TO_BIRTH = abs(as.numeric(clinicalFilteredCrop$DAYS_TO_BIRTH)/30)
-clinicalFilteredCrop$DSS_MONTHS = as.numeric(clinicalFilteredCrop$DSS_MONTHS )
+clinicalFilteredCrop$deceased = clinicalFilteredCrop$OS_STATUS == "1:DECEASED"
+clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$DAYS_LAST_FOLLOWUP)/30
 
 
 
-HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 60)
-HypothesisRows = HypothesisRows + 5
-clinicalHypothesisIDs = data_clinical_patient_filtered$V1[HypothesisRows]
 
-
-clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == "Dead",
-                                   clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$DSS_MONTHS)
-
-
+# identify which patients are in the hypothesis group
+clinicalHypothesisIDs = clinicalHypothesis$V1
 rowsMatchID = which(clinicalFilteredCrop$PATIENT_ID %in% clinicalHypothesisIDs)
 clinicalFilteredCrop$HypothesisGroup = numeric(length(clinicalFilteredCrop$PATIENT_ID))
 clinicalFilteredCrop$HypothesisGroup[rowsMatchID] = 1
 
-fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop)
 
+
+# ensure the null sample size is equal to alternative
+set.seed(20) 
+# Find the indices of 0s and 1s
+zero_indices <- which(clinicalFilteredCrop$HypothesisGroup == 0 &  is.na(clinicalFilteredCrop$Months_to_last_follow_up) == FALSE)
+one_indices <- which(clinicalFilteredCrop$HypothesisGroup == 1 & is.na(clinicalFilteredCrop$Months_to_last_follow_up) == FALSE)
+print(length(zero_indices))
+print(length(one_indices))
+#keep a certain number of non 
+if (length(zero_indices) > length(one_indices)){
+random_zero_indices <- sample(zero_indices, length(one_indices), replace = FALSE)
+random_one_indices = one_indices
+}else if(length(zero_indices) < length(one_indices)){
+  random_one_indices <- sample(one_indices, length(zero_indices), replace = FALSE)
+  random_zero_indices = zero_indices
+}else{
+  random_one_indices = one_indices
+  random_zero_indices = zero_indices
+  
+}
+# Combine the indices of 0s and 1s to keep
+indices_to_keep <- c(random_one_indices, random_zero_indices)
+
+
+# do the survival analysis plot
+clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == "Dead",
+                                   clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$Months_to_last_follow_up)
+
+fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop[indices_to_keep,])
 print(fit)
-ggsurvplot(fit, data=clinicalFilteredCrop, pval = T)
-
-
+ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Men >=74"))
 
 ```
 
 
 
 
+```{r}
+library(DEseq2)
+library(BiocManager)
+
+# make the metadata
+clinicalHypothesisIDs
+
+```
 
 
 
