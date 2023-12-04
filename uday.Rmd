@@ -141,7 +141,7 @@ cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 # CLINICAL ANALYSIS
 
 # hypothesis males over 60 are more likely to have renal cell cancer
-HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 74)
+HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 69)
 HypothesisRows = HypothesisRows + 5
 clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
 
@@ -264,14 +264,49 @@ ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", tit
 ```
 
 
+```{r}
+boxplot(as.numeric(clinicalFilteredCrop$AGE[which(clinicalFilteredCrop$SEX == "Female")]))
+boxplot(as.numeric(clinicalFilteredCrop$AGE[which(clinicalFilteredCrop$SEX == "Male")]))
+```
 
 
 ```{r}
-library(DEseq2)
+library(DESeq2)
 library(BiocManager)
 
 # make the metadata
-clinicalHypothesisIDs
+#clinicalHypothesisIDs
+
+library(scatterplot3d)
+# Assuming your data is in a data frame named 'patients_data'
+# Let's create a sample dataset for demonstration purposes
+# Replace this with your actual dataset
+patients_data <- data.frame(
+  age = c(25, 30, 35, 40, 25, 30),
+  sex = c("Male", "Female", "Male", "Female", "Male", "Female")
+)
+
+# Calculate the frequency of each age and sex combination
+freq_table <- table(clinicalFilteredCrop$AGE, clinicalFilteredCrop$SEX)
+
+# Convert the frequency table to a data frame
+freq_df <- as.data.frame(freq_table)
+names(freq_df) <- c("age", "sex", "frequency")
+
+# Load the scatterplot3d library
+library(scatterplot3d)
+
+# Create the 3D scatterplot
+scatterplot3d(freq_df$age, freq_df$sex, freq_df$frequency, 
+              main = "Age vs Sex vs Frequency",
+              xlab = "Age",
+              ylab = "Sex",
+              zlab = "Frequency",
+              color = "blue", # Change color if needed
+              pch = 19,       # Change symbol if needed
+              type = "h",     # Use 'h' for points with segments
+              angle = 55      # Adjust angle for better view
+)
 
 ```
 
