@@ -50,6 +50,10 @@ columns_to_keep <- sapply(RNAseq, function(col) {
                                                 substr(col[1], 1, 12))))})
 columns_to_keep[1]=TRUE
 RNAseq_filtered <- RNAseq[, columns_to_keep]
+colnames(RNAseq_filtered) <- unlist(RNAseq_filtered[1, ])  # Setting the column names using the first row
+RNAseq_filtered <- RNAseq_filtered[-1, ]
+rownames(RNAseq_filtered) <- RNAseq_filtered[,1]  # Assigning the values of the first column as row names
+RNAseq_filtered <- RNAseq_filtered[, -1]  
 ```
 
 
@@ -141,7 +145,8 @@ cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 # CLINICAL ANALYSIS
 
 # hypothesis males over 60 are more likely to have renal cell cancer
-HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] >= 69)
+#HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] > 60 )
+HypothesisRows = which(data_clinical_patient_filtered$V38[6:359] == "AFR" | data_clinical_patient_filtered$V38[6:359] == "AFR_ADMIX" )
 HypothesisRows = HypothesisRows + 5
 clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
 
@@ -259,56 +264,31 @@ clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == 
 
 fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop[indices_to_keep,])
 print(fit)
-ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Men >=74"))
+ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Hypothesis"))
 
+```
+
+
+
+
+```{r}
+# get RNA table based on the hypothesis
+RNAseq_filtered_Hypo = RNAseq_filtered[ , which(substr(colnames(RNAseq_filtered), 1, 12) %in% unique(clinicalHypothesisIDs)) ]
+metaData = numeric(length(RNAseq_filtered[,1]))
+metaData = ifelse(RNAseq_filtered$Gene == unique(clinicalHypothesisIDs), 1, 0)
+RNAseq_filteredToEdit = RNAseq_filtered
 ```
 
 
 ```{r}
-boxplot(as.numeric(clinicalFilteredCrop$AGE[which(clinicalFilteredCrop$SEX == "Female")]))
-boxplot(as.numeric(clinicalFilteredCrop$AGE[which(clinicalFilteredCrop$SEX == "Male")]))
+
+RNAseq_filteredToEdit <- RNAseq_filteredToEdit[rowSums(as.numeric(unlist(RNAseq_filteredToEdit)))>1,]
+head(head(countData))
 ```
 
 
-```{r}
-library(DESeq2)
-library(BiocManager)
 
-# make the metadata
-#clinicalHypothesisIDs
 
-library(scatterplot3d)
-# Assuming your data is in a data frame named 'patients_data'
-# Let's create a sample dataset for demonstration purposes
-# Replace this with your actual dataset
-patients_data <- data.frame(
-  age = c(25, 30, 35, 40, 25, 30),
-  sex = c("Male", "Female", "Male", "Female", "Male", "Female")
-)
-
-# Calculate the frequency of each age and sex combination
-freq_table <- table(clinicalFilteredCrop$AGE, clinicalFilteredCrop$SEX)
-
-# Convert the frequency table to a data frame
-freq_df <- as.data.frame(freq_table)
-names(freq_df) <- c("age", "sex", "frequency")
-
-# Load the scatterplot3d library
-library(scatterplot3d)
-
-# Create the 3D scatterplot
-scatterplot3d(freq_df$age, freq_df$sex, freq_df$frequency, 
-              main = "Age vs Sex vs Frequency",
-              xlab = "Age",
-              ylab = "Sex",
-              zlab = "Frequency",
-              color = "blue", # Change color if needed
-              pch = 19,       # Change symbol if needed
-              type = "h",     # Use 'h' for points with segments
-              angle = 55      # Adjust angle for better view
-)
-
-```
 
 
 
