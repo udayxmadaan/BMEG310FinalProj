@@ -162,14 +162,19 @@ ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", tit
 
 # hypothesis males over 60 are more likely to have renal cell cancer
 #HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] > 60 )
-HypothesisRows = which(data_clinical_patient_filtered$V38[6:359] == "AFR" | data_clinical_patient_filtered$V38[6:359] == "AFR_ADMIX" )
-HypothesisRows = HypothesisRows + 5
-clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
+#HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Female")
+#HypothesisRows = HypothesisRows + 5
+#clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
 
-rows = which(substr(mutation_data$Tumor_Sample_Barcode, 1, 12) %in% unique(clinicalHypothesis$V1))
+#rows = which(substr(data_mutations_filtered$Tumor_Sample_Barcode, 1, 12) %in% unique(clinicalHypothesis$V1))
 
-mutationHypothesis = mutation_data[rows,]
+#mutationHypothesis = data_mutations_filtered[rows,]
 
+
+# just for gene _______
+rowsgene = which(data_mutations_filtered$V1 == "PBRM1")
+mutationHypothesis = data_mutations_filtered[rowsgene, ]
+# just for gene survival ___
 
 # create the mutation matrix and cluster
 cnv_events = unique(mutationHypothesis$Variant_Classification)
@@ -298,11 +303,32 @@ RNAseq_filteredToEdit = RNAseq_filtered
 
 ```{r}
 
-RNAseq_filteredToEdit <- RNAseq_filteredToEdit[rowSums(as.numeric(unlist(RNAseq_filteredToEdit)))>1,]
-head(head(countData))
+RNAseq_filteredToEdit = RNAseq_filtered
+head(head(RNAseq_filteredToEdit))
+
+
+sampleDists = dist(t(RNAseq_filteredToEdit), upper = TRUE)
+sampleDists
 ```
 
 
+```{r}
+annot_col = data.frame(cluster)
+row.names(annot_col) = substr(rownames(cluster), 1, 12)
+
+sampleDistMatrix = as.matrix( sampleDists )
+rownames(sampleDistMatrix) = colnames(RNAseq_filteredToEdit)
+colnames(sampleDistMatrix) = colnames(RNAseq_filteredToEdit)
+
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists,
+         cluster_rows=FALSE, show_rownames=TRUE,
+         cluster_cols=TRUE,
+         annotation_col=annot_col)
+
+
+```
 
 
 
