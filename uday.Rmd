@@ -124,7 +124,7 @@ oncomat <- oncomat[,-1]
 oncomat.ordered <- oncomat[order(-hugo$Freq),]
 mat <- oncomat.ordered
 mat[mat!=""]=1
-mat[mat==""]=0
+mat[mat==""| mat=="Silent"]=0
 mat <- apply(mat, 2 ,as.numeric)
 mat <- as.matrix(mat)
 rownames(mat)  <-  row.names(oncomat.ordered)
@@ -140,6 +140,22 @@ cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
 ```
 
 
+```{r}
+
+# create a copy of the clinical data using only rows with actual data
+clinicalFilteredCrop = data_clinical_patient_filtered[6:359,]
+colnames(clinicalFilteredCrop) = data_clinical_patient_filtered[5,]
+clinicalFilteredCrop$deceased = clinicalFilteredCrop$OS_STATUS == "1:DECEASED"
+clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$DAYS_LAST_FOLLOWUP)/30
+
+# do the survival analysis plot
+clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == "Dead",
+                                   clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$Months_to_last_follow_up)
+
+fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop[indices_to_keep,])
+print(fit)
+ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Hypothesis"))
+```
 
 ```{r}
 # CLINICAL ANALYSIS
@@ -194,8 +210,8 @@ oncomat <- oncomat[,-1]
 mat = oncomat
 
 
-mat[mat!="" & mat!="Missense_Mutation" & mat!="Nonsense_Mutation"]=1
-mat[mat=="" | mat=="Missense_Mutation" | mat=="Nonsense_Mutation"]=0
+mat[mat!=""]=1
+mat[mat=="" | mat=="Frame_Shift_Del" | mat=="5'UTR"]=0
 
 
 mat <- apply(mat, 2 ,as.numeric)
