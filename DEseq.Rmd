@@ -1,0 +1,112 @@
+---
+title: "Ivy2"
+author: "Ivy Wu 85658672"
+date: "2023-12-04"
+output: html_document
+---
+```{r}
+library(pheatmap)
+library(ggplot2)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(pathview)
+library(gage)
+library(gageData)
+```
+
+```{r}
+RNA_data <- as.matrix(RNAseq_filtered) 
+
+colnames(RNA_data) <- RNA_data[1, ]
+rownames(RNA_data) <- RNA_data[,1]
+
+RNA_data <- RNA_data[-1,-1]
+```
+
+```{r}
+RNA_data_numeric <- apply(RNA_data, 2, as.numeric)
+
+row_sums <- rowSums(RNA_data_numeric, na.rm = TRUE)
+
+top_20indices <- order(row_sums, decreasing = TRUE)[1:20]
+
+top_20_RNA <- RNA_data[top_20indices, ]
+```
+
+```{r}
+sampleDists = dist(t(top_20_RNA),upper = TRUE)
+
+annot_col = data.frame(res$tree_col)
+row.names(annot_col) <- rownames(top_20_RNA)
+
+sampleDistMatrix <-  as.matrix(sampleDists)
+rownames(sampleDistMatrix) <-  colnames(top_20_RNA)
+colnames(sampleDistMatrix) <-  colnames(top_20_RNA)
+
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists,
+         cluster_rows = FALSE, 
+         show_rownames = TRUE,
+         cluster_cols = TRUE,
+         annotation_col=annot_col) 
+```
+
+```{r}
+
+top_5indices <- order(row_sums, decreasing = TRUE)[1:5]
+
+top_5_RNA <- RNA_data[top_5indices, ]
+
+sampleDists = dist(t(top_5_RNA),upper = TRUE)
+
+annot_col = data.frame(top_5_RNA)
+row.names(annot_col) <- rownames(top_5_RNA)
+
+sampleDistMatrix <-  as.matrix(sampleDists)
+rownames(sampleDistMatrix) <-  colnames(top_5_RNA)
+colnames(sampleDistMatrix) <-  colnames(top_5_RNA)
+
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists,
+         cluster_rows = FALSE, 
+         show_rownames = TRUE,
+         cluster_cols = TRUE) 
+```
+
+PCA plot
+
+```{r}
+top_20_RNA_numeric <- apply(top_20_RNA, 2, as.numeric)
+
+pca_RNA <- prcomp(t(top_20_RNA_numeric), scale. = TRUE)
+score <- pca_RNA$x
+scores_df <- as.data.frame(score)
+```
+
+
+```{r}
+ggplot(scores_df, aes(x = PC1, y = PC2)) + 
+  geom_point(size = 4)
+```
+```{r}
+library("gridExtra")
+```
+
+```{r}
+p1 <- ggplot(as.data.frame(top_20_RNA_numeric), aes(x = `TCGA-BP-4999-01A-01R-1334-07`)) +
+  geom_histogram(bins = 50) +
+  labs(title = "No transformation")
+
+log2 <- log(top_20_RNA_numeric + 1, base = 2)
+
+p2 <- ggplot(as.data.frame(log2), aes(x = `TCGA-BP-4999-01A-01R-1334-07`)) +
+  geom_histogram(bins = 50) +
+  labs(title = "Log(x+1)")
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+
+
