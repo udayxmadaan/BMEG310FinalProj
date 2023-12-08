@@ -76,7 +76,7 @@ data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
 
 ```{r}
 library(ggplot2)
-hugo <- as.data.frame(table(data_mutations$Hugo_Symbol))
+hugo <- as.data.frame(table(data_mutations_filtered$Hugo_Symbol))
 hugo.ordered <- hugo[order(-hugo$Freq),]
 ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
   geom_col()+
@@ -87,9 +87,9 @@ ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
 
 Oncomat Matrix
 ```{r}
-cnv_events = unique(data_mutations$Variant_Classification)
+cnv_events = unique(data_mutations_filtered$Variant_Classification)
 oncomat = reshape2::dcast(
-  data = data_mutations,
+  data = data_mutations_filtered,
   formula = Hugo_Symbol ~ Tumor_Sample_Barcode,
   fun.aggregate = function(x, cnv = cnv_events) {
     x = as.character(x) # >= 2 same/distinct variant classification = Multi_Hit
@@ -123,20 +123,51 @@ rownames(oncomat) = oncomat$Hugo_Symbol
 oncomat <- oncomat[,-1]
 oncomat.ordered <- oncomat[order(-hugo$Freq),]
 mat <- oncomat.ordered
-mat[mat!=""]=1
-mat[mat==""| mat=="Silent"]=0
-mat <- apply(mat, 2 ,as.numeric)
+mat[mat=="Missense_Mutation" ]="1"
+mat[mat != "1"] = 0
+
 mat <- as.matrix(mat)
+mat <- apply(mat, 2 ,as.numeric)
+
 rownames(mat)  <-  row.names(oncomat.ordered)
 ```
 
 ```{r}
-library(pheatmap)
-reduce.mat <- mat[1:5,]
+
+reduce.mat <- mat[1:28,]
 res <- pheatmap(reduce.mat,
          cluster_rows = F,
          show_colnames=FALSE)
-cluster <-  as.data.frame(cutree(res$tree_col, k = 3))
+
+#get gene rows from matrix
+VHL = mat[1,]
+PBRM1 = mat[2,]
+
+
+#blank cluster column with patientID
+cluster = numeric(length(colnames(mat)))
+
+
+#assign
+cluster = ifelse(PBRM1 == 1 | VHL == 1, 1, 0)
+cluster = data.frame(cluster)
+
+
+
+
+
+colnames(data_clinical_patient_filtered) <- data_clinical_patient_filtered[1, ]
+mutation_patients <- as.character(rownames(cluster))
+mutation_patients <- substr(mutation_patients, 1, nchar(mutation_patients) - 3)
+survival_df <- data_clinical_patient_filtered[data_clinical_patient_filtered$`#Patient Identifier` %in% mutation_patients,
+                                              c("#Patient Identifier",
+                                                "Overall Survival Status",
+                                                "Overall Survival (Months)")]
+survival_df$deceased <- survival_df$`Overall Survival Status`== "1:DECEASED"
+survival_df$cluster <- cluster[,1]
+survival_df$`Overall Survival (Months)` <- as.numeric(survival_df$`Overall Survival (Months)`)
+fit <- survfit(Surv(`Overall Survival (Months)`, deceased) ~ cluster, data = survival_df)
+ggsurvplot(fit, data=survival_df, pval = T)
 ```
 
 
@@ -172,7 +203,7 @@ ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", tit
 
 
 # just for gene _______
-rowsgene = which(data_mutations_filtered$V1 == "PBRM1")
+rowsgene = which(data_mutations_filtered$Hugo_Symbol == "PBRM1")
 mutationHypothesis = data_mutations_filtered[rowsgene, ]
 # just for gene survival ___
 
@@ -290,6 +321,21 @@ ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", tit
 ```
 
 
+```{r}
+cluster <-  as.data.frame(cutree(res$tree_col, k = 18))
+colnames(data_clinical_patient_filtered) <- data_clinical_patient_filtered[1, ]
+mutation_patients <- as.character(rownames(cluster))
+mutation_patients <- substr(mutation_patients, 1, nchar(mutation_patients) - 3)
+survival_df <- data_clinical_patient_filtered[data_clinical_patient_filtered$`#Patient Identifier` %in% mutation_patients,
+                                              c("#Patient Identifier",
+                                                "Overall Survival Status",
+                                                "Overall Survival (Months)")]
+survival_df$deceased <- survival_df$`Overall Survival Status`== "1:DECEASED"
+survival_df$cluster <- cluster[,1]
+survival_df$`Overall Survival (Months)` <- as.numeric(survival_df$`Overall Survival (Months)`)
+fit <- survfit(Surv(`Overall Survival (Months)`, deceased) ~ cluster, data = survival_df)
+ggsurvplot(fit, data=survival_df, pval = T)
+```
 
 
 ```{r}
@@ -313,19 +359,20 @@ sampleDists
 
 
 ```{r}
-annot_col = data.frame(cluster)
+sampleDists[is.na(sampleDists)] = 0
+sampleDists[is.infinite(sampleDists)] <- 0
+annot_col = cluster
 row.names(annot_col) = substr(rownames(cluster), 1, 12)
 
 sampleDistMatrix = as.matrix( sampleDists )
-rownames(sampleDistMatrix) = colnames(RNAseq_filteredToEdit)
-colnames(sampleDistMatrix) = colnames(RNAseq_filteredToEdit)
+rownames(sampleDistMatrix) = substr(colnames(RNAseq_filteredToEdit),1,12)
+colnames(sampleDistMatrix) = substr(colnames(RNAseq_filteredToEdit),1,12)
 
 pheatmap(sampleDistMatrix,
          clustering_distance_rows = sampleDists,
          clustering_distance_cols = sampleDists,
          cluster_rows=FALSE, show_rownames=TRUE,
-         cluster_cols=TRUE,
-         annotation_col=annot_col)
+         cluster_cols=TRUE, annotation_col = annot_col)
 
 
 ```
