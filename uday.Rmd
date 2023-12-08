@@ -84,6 +84,32 @@ ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
   scale_x_discrete(limits = hugo.ordered[1:15,]$Var1)
 ```
 
+```{r}
+mat20 = matrix(0, nrow = length(data_mutations_filtered$Hugo_Symbol), ncol = 2)
+mat20[,1] = data_mutations_filtered$Hugo_Symbol
+
+# get the number of people with this gene mutated that are dead
+for (i in 1:length(data_mutations_filtered$Hugo_Symbol)){
+ rows =  which(data_mutations_filtered$Hugo_Symbol == data_mutations_filtered$Hugo_Symbol[i])
+ 
+ names = substr(data_mutations_filtered$Tumor_Sample_Barcode[rows],1,12)
+ 
+ rows = which(data_clinical_patient_filtered[6:359,1] %in% names & data_clinical_patient_filtered$`Overall Survival Status` == "1:DECEASED") + 5
+ mat20[i,2] = length(rows)
+}
+
+
+```
+
+```{r}
+mat20 <- mat20[!duplicated(mat20[, 1]), ]
+mat20 = data.frame(mat20)
+mat20[,2] = as.numeric(mat20[,2])
+mat20 <- mat20[order(mat20[, 2]), ]
+```
+
+
+
 
 Oncomat Matrix
 ```{r}
@@ -132,26 +158,29 @@ mat <- apply(mat, 2 ,as.numeric)
 rownames(mat)  <-  row.names(oncomat.ordered)
 ```
 
+
 ```{r}
 
-reduce.mat <- mat[1:28,]
+row_sums <- rowSums(mat)
+sorted_indices <- order(row_sums, decreasing = TRUE)
+
+# Reorder the matrix rows based on the sorted indices
+matSort <- mat[sorted_indices, ]
+matSort2 =  rowSums(matSort)
+
+num = 200
+barplot(t(matSort2[1:num]), beside = TRUE, legend.text = rownames(matSort2[1:num]),
+        main = "Number of Patients with Mutations in Gene", xlab = "Categories", ylab = "Values")
+```
+
+```{r}
+
+reduce.mat <- matSort[1:15,]
 res <- pheatmap(reduce.mat,
          cluster_rows = F,
          show_colnames=FALSE)
 
-#get gene rows from matrix
-VHL = mat[1,]
-PBRM1 = mat[2,]
-
-
-#blank cluster column with patientID
-cluster = numeric(length(colnames(mat)))
-
-
-#assign
-cluster = ifelse(PBRM1 == 1 | VHL == 1, 1, 0)
-cluster = data.frame(cluster)
-
+cluster <-  as.data.frame(cutree(res$tree_col, k = 18))
 
 
 
@@ -171,22 +200,7 @@ ggsurvplot(fit, data=survival_df, pval = T)
 ```
 
 
-```{r}
 
-# create a copy of the clinical data using only rows with actual data
-clinicalFilteredCrop = data_clinical_patient_filtered[6:359,]
-colnames(clinicalFilteredCrop) = data_clinical_patient_filtered[5,]
-clinicalFilteredCrop$deceased = clinicalFilteredCrop$OS_STATUS == "1:DECEASED"
-clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$DAYS_LAST_FOLLOWUP)/30
-
-# do the survival analysis plot
-clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == "Dead",
-                                   clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$Months_to_last_follow_up)
-
-fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop[indices_to_keep,])
-print(fit)
-ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Hypothesis"))
-```
 
 ```{r}
 # CLINICAL ANALYSIS
@@ -322,7 +336,7 @@ ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", tit
 
 
 ```{r}
-cluster <-  as.data.frame(cutree(res$tree_col, k = 18))
+cluster <-  as.data.frame(cutree(res$tree_col, k = 15))
 colnames(data_clinical_patient_filtered) <- data_clinical_patient_filtered[1, ]
 mutation_patients <- as.character(rownames(cluster))
 mutation_patients <- substr(mutation_patients, 1, nchar(mutation_patients) - 3)
@@ -378,6 +392,29 @@ pheatmap(sampleDistMatrix,
 ```
 
 
+```{r}
+myMat = as.matrix(RNAseq_filteredToEdit)
+myMat = matrix(as.numeric(myMat), nrow = nrow(myMat))
+pca_res <- prcomp(t(myMat))
+
+score <- pca_res$x
+
+
+score = as.data.frame(score)
+```
+
+
+```{r}
+
+clusterVector = cluster$`cutree(res$tree_col, k = 18)`
+
+
+score$color <- as.factor(filtered_cluster)
+
+
+ggplot(score, aes(x=PC1, y=PC2,  color=color)) + 
+  geom_point(size = 4)
+```
 
 
 
