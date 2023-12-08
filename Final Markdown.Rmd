@@ -58,6 +58,11 @@ rownames(RNAseq_filtered) <- RNAseq_filtered[, 1]
 colnames(RNAseq_filtered) <- RNAseq_filtered[1 ,]
 RNAseq_filtered <- RNAseq_filtered[,-1]
 RNAseq_filtered <- RNAseq_filtered[-1 ,]
+nontumor_columns <- grep("^.{13}11", colnames(RNAseq_filtered))
+RNAseq_filtered <- RNAseq_filtered[, -nontumor_columns]
+colnames(RNAseq_filtered) <- substr(colnames(RNAseq_filtered), 1, 12)
+unique_patients <- unique(colnames(RNAseq_filtered))
+RNAseq_filtered <- RNAseq_filtered[, unique_patients, drop = FALSE]
 ```
 
 
