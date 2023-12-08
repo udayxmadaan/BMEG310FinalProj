@@ -54,6 +54,10 @@ columns_to_keep <- sapply(RNAseq, function(col) {
                                                 substr(col[1], 1, 12))))})
 columns_to_keep[1]=TRUE
 RNAseq_filtered <- RNAseq[, columns_to_keep]
+rownames(RNAseq_filtered) <- RNAseq_filtered[, 1]
+colnames(RNAseq_filtered) <- RNAseq_filtered[1 ,]
+RNAseq_filtered <- RNAseq_filtered[,-1]
+RNAseq_filtered <- RNAseq_filtered[-1 ,]
 ```
 
 
