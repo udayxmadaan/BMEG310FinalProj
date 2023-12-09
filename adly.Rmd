@@ -14,6 +14,12 @@ library("survminer")
 library("SummarizedExperiment")
 library("TCGAbiolinks")
 library("gridExtra")
+library("DESeq2")
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+library("pathview")
+library("gage")
+library("gageData")
 ```
 
 ## Mutation Analysis
@@ -103,16 +109,7 @@ Exploratory Analysis and Visualization
 #Make first column the row names
 
 RNAseq_matrix = as.matrix(RNAseq_filtered)
-RNAseq_matrix <- apply(RNAseq_matrix, 2, as.numeric)
 RNAseq_matrix <- RNAseq_matrix[rowSums(RNAseq_matrix)>1,]
-dim(RNAseq_matrix)
-length(unique(substr(colnames(RNAseq_filtered), 1, 12)))
-length(unique(colnames(RNAseq_filtered)))
-patient_names <- colnames(RNAseq_filtered)
-
-matching_columns <- grep(paste0("^", "TCGA-CJ-5684"), names(RNAseq_filtered), value = TRUE)
-length(matching_columns)
-
 ```
 
 ```{r}
@@ -144,5 +141,60 @@ score$color <- as.factor(cluster$`cutree(res$tree_col, k = 2)`)
 
 ggplot(score, aes(x=PC1, y=PC2,  color=color)) + 
   geom_point(size = 4)
+```
+Differential Expression Analysis
+```{r}
+colnames(cluster)[colnames(cluster) == "cutree(res$tree_col, k = 2)"] <- "cluster_no."
+rownames(cluster) <- substr(rownames(cluster), 1, 12)
+order_in_RNAseq <- match(rownames(cluster), colnames(RNAseq_matrix))
+RNAseq_matrix_reordered <- RNAseq_matrix[, order_in_RNAseq]
+dds = DESeqDataSetFromMatrix(countData=RNAseq_matrix_reordered,
+                              colData=cluster,
+                              design=~cluster_no.)
+dds = DESeq(dds)
+```
+```{r}
+res <- results(dds)
+res.05 <- results(dds, alpha = 0.05)
+resSig <- subset(res, padj < 0.05)
+head(resSig[ order( resSig$log2FoldChange ), ])
+ntd <- normTransform(dds)
+vsd <- vst(dds)
+plotMA(res, ylim=c(-2,2))
+```
+```{r}
+upGenes <- order(resSig$log2FoldChange, decreasing = TRUE)[1:10]
+downGenes <- order(resSig$log2FoldChange, decreasing = FALSE)[1:10]
+all.genes <- c(upGenes, downGenes)
+
+annot_col = data.frame(cluster$cluster_no.)
+row.names(annot_col) <- rownames(cluster)
+
+sampleMatrix <- assay(vsd)[all.genes,]
+
+rownames(sampleMatrix) = rownames(RNAseq_matrix_reordered[all.genes,])
+colnames(sampleMatrix) = colnames(RNAseq_matrix_reordered)
+
+pheatmap(sampleMatrix , cluster_rows=FALSE, show_rownames=TRUE, show_colnames = FALSE,
+         cluster_cols=TRUE, annotation_col=annot_col)
+```
+```{r}
+rownames(res) <- substr(rownames(res), 1, 15)
+res$symbol = mapIds(org.Hs.eg.db,
+                    keys=row.names(res), 
+                    column="SYMBOL",
+                    keytype="ENSEMBL",
+                    multiVals="first")
+res$entrez = mapIds(org.Hs.eg.db,
+                    keys=row.names(res), 
+                    column="ENTREZID",
+                    keytype="ENSEMBL",
+                    multiVals="first")
+res$name =   mapIds(org.Hs.eg.db,
+                    keys=row.names(res), 
+                    column="GENENAME",
+                    keytype="ENSEMBL",
+                    multiVals="first")
+head(res, 10)
 ```
 
