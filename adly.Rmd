@@ -160,26 +160,6 @@ resSig <- subset(res, padj < 0.05)
 head(resSig[ order( resSig$log2FoldChange ), ])
 ntd <- normTransform(dds)
 vsd <- vst(dds)
-plotMA(res, ylim=c(-2,2))
-```
-```{r}
-upGenes <- order(resSig$log2FoldChange, decreasing = TRUE)[1:10]
-downGenes <- order(resSig$log2FoldChange, decreasing = FALSE)[1:10]
-all.genes <- c(upGenes, downGenes)
-
-annot_col = data.frame(cluster$cluster_no.)
-row.names(annot_col) <- rownames(cluster)
-
-sampleMatrix <- assay(vsd)[all.genes,]
-
-rownames(sampleMatrix) = rownames(RNAseq_matrix_reordered[all.genes,])
-colnames(sampleMatrix) = colnames(RNAseq_matrix_reordered)
-
-pheatmap(sampleMatrix , cluster_rows=FALSE, show_rownames=TRUE, show_colnames = FALSE,
-         cluster_cols=TRUE, annotation_col=annot_col)
-```
-```{r}
-rownames(res) <- substr(rownames(res), 1, 15)
 res$symbol = mapIds(org.Hs.eg.db,
                     keys=row.names(res), 
                     column="SYMBOL",
@@ -195,6 +175,45 @@ res$name =   mapIds(org.Hs.eg.db,
                     column="GENENAME",
                     keytype="ENSEMBL",
                     multiVals="first")
-head(res, 10)
+```
+```{r}
+upGenes <- order(resSig$log2FoldChange, decreasing = TRUE)[1:10]
+downGenes <- order(resSig$log2FoldChange, decreasing = FALSE)[1:10]
+all.genes <- c(upGenes, downGenes)
+
+annot_col = data.frame(cluster$cluster_no.)
+row.names(annot_col) <- rownames(cluster)
+
+sampleMatrix <- assay(vsd)[all.genes,]
+
+rownames(sampleMatrix) = substr(rownames(RNAseq_matrix_reordered[all.genes,]), 1, 15)
+colnames(sampleMatrix) = colnames(RNAseq_matrix_reordered)
+hugo.genes <- as.data.frame(res$symbol)
+matching_genes <- match(rownames(sampleMatrix), rownames(hugo.genes))
+
+
+for(i in 1:nrow(sampleMatrix)){
+  rownames(sampleMatrix)[i] <- hugo.genes$`res$symbol`[matching_genes[i]]
+}
+
+
+pheatmap(sampleMatrix , cluster_rows=FALSE, show_rownames=TRUE, show_colnames = FALSE,
+         cluster_cols=TRUE, annotation_col=annot_col)
+```
+```{r}
+data(kegg.sets.hs)
+data(sigmet.idx.hs)
+kegg.sets.hs = kegg.sets.hs[sigmet.idx.hs]
+foldchanges = res$log2FoldChange
+names(foldchanges) = res$entrez
+keggres = gage(foldchanges, gsets=kegg.sets.hs)
+```
+
+```{r}
+head(keggres$greater)
+keggrespathways <- rownames(keggres$greater)[1:5]
+keggresids = substr(keggrespathways, start=1, stop=8)
+keggresids
+pathview(gene.data=foldchanges, pathway.id=keggresids, species="hsa")
 ```
 
