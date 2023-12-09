@@ -1,6 +1,6 @@
 ---
-title: "Untitled"
-author: "Uday Madaan"
+title: "Analysis Appendix"
+author: "Uday Madaan, Adly Al-Sharif, Ivy Wu"
 date: "2023-11-23"
 output: html_document
 ---
@@ -8,18 +8,30 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
+library(ggplot2)
+library(pheatmap)
+library(survival)
+library("survminer")
+library("SummarizedExperiment")
+library("TCGAbiolinks")
+library("gridExtra")
+library("DESeq2")
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+library("pathview")
+library("gage")
+library("gageData")
 ```
 
+Import Data
 ```{r}
-#import data
 data_clinical_patient = read.csv("data_clinical_patient.txt", sep = '\t', 
                                  header = FALSE)
 data_mutations = read.csv("data_mutations.txt", sep = '\t', header = TRUE)
 RNAseq = read.csv("RNAseq_KIRC.csv", sep = ',', header = FALSE)
 ```
 
-
-
+Get Common Patients
 ```{r}
 clinicalPatients = unique(data_clinical_patient[6:nrow(data_clinical_patient),
                                                 1])
@@ -36,7 +48,7 @@ commonPatients <- Reduce(intersect, list(clinicalPatients, mutationPatients,
                                          RNApatients))
 ```
 
-
+Filtering
 ```{r}
 # Filter data mutations to keep the common patient IDs
 data_mutations_filtered <- data_mutations[sapply(
@@ -46,9 +58,8 @@ data_mutations_filtered <- data_mutations[sapply(
 ```
 
 
-
 ```{r}
-# Filter RNAseq to keep the common patient IDs
+# Filter RNAseq to keep the common patient IDs and fix column and row names
 columns_to_keep <- sapply(RNAseq, function(col) {
   any(sapply(commonPatients, function(match) grepl(match, 
                                                 substr(col[1], 1, 12))))})
@@ -66,9 +77,6 @@ colnames(RNAseq_filtered) <- substr(colnames(RNAseq_filtered), 1, 12)
 unique_patients <- unique(colnames(RNAseq_filtered))
 RNAseq_filtered <- RNAseq_filtered[, unique_patients, drop = FALSE]
 ```
-
-
-
 ```{r}
 #filter clinical data
 rows_to_keep = sapply(data_clinical_patient$V1, function(x) 
@@ -76,4 +84,219 @@ rows_to_keep = sapply(data_clinical_patient$V1, function(x)
   USE.NAMES = FALSE)
 rows_to_keep[1:5]=TRUE
 data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
+```
+
+
+## Mutation Analysis
+
+Most Mutated Genes
+```{r}
+hugo <- as.data.frame(table(data_mutations_filtered$Hugo_Symbol))
+hugo.ordered <- hugo[order(-hugo$Freq),]
+ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 45,hjust=1))+ 
+  scale_x_discrete(limits = hugo.ordered[1:15,]$Var1)+
+  labs(x="Gene", y="Frequency", title="Top 15 Mutated Genes")
+```
+
+Oncomat Matrix
+```{r}
+cnv_events = unique(data_mutations_filtered$Variant_Classification)
+cnv_events
+oncomat = reshape2::dcast(
+  data = data_mutations_filtered,
+  formula = Hugo_Symbol ~ Tumor_Sample_Barcode,
+  fun.aggregate = function(x, cnv = cnv_events) {
+    x = as.character(x) # >= 2 same/distinct variant classification = Multi_Hit
+    xad = x[x %in% cnv]
+    xvc = x[!x %in% cnv]
+    
+    if (length(xvc) > 0) {
+      xvc = ifelse(test = length(xvc) > 1,
+                   yes = 'Multi_Hit',
+                   no = xvc)
+    }
+    
+    x = ifelse(
+      test = length(xad) > 0,
+      yes = paste(xad, xvc, sep = ';'),
+      no = xvc
+    )
+    x = gsub(pattern = ';$',
+             replacement = '',
+             x = x)
+    x = gsub(pattern = '^;',
+             replacement = '',
+             x = x)
+    return(x)
+  },
+  value.var = 'Variant_Classification',
+  fill = '',
+  drop = FALSE
+)
+rownames(oncomat) = oncomat$Hugo_Symbol
+oncomat <- oncomat[,-1]
+oncomat.ordered <- oncomat[order(-hugo$Freq),]
+mat <- oncomat.ordered
+mat[mat != "Silent" & mat != ""]=1
+mat[mat == "" | mat == "Silent"]=0
+mat <- apply(mat, 2 ,as.numeric)
+mat <- as.matrix(mat)
+rownames(mat)  <-  row.names(oncomat.ordered)
+```
+
+Heat Map for top 5 Mutated Genes
+```{r}
+reduce.mat <- mat[1:5,]
+res <- pheatmap(reduce.mat,
+         cluster_rows = F,
+         show_colnames=FALSE)
+```
+
+Survival Analysis
+```{r}
+cluster <-  as.data.frame(cutree(res$tree_col, k = 2))
+colnames(data_clinical_patient_filtered) <- data_clinical_patient_filtered[1, ]
+mutation_patients <- as.character(rownames(cluster))
+mutation_patients <- substr(mutation_patients, 1, nchar(mutation_patients) - 3)
+survival_df <- data_clinical_patient_filtered[data_clinical_patient_filtered$`#Patient Identifier` %in% mutation_patients,
+                                              c("#Patient Identifier",
+                                                "Overall Survival Status",
+                                                "Overall Survival (Months)")]
+survival_df$deceased <- survival_df$`Overall Survival Status`== "1:DECEASED"
+survival_df$cluster <- cluster[,1]
+survival_df$`Overall Survival (Months)` <- as.numeric(survival_df$`Overall Survival (Months)`)
+#Searching for 
+fit <- survfit(Surv(`Overall Survival (Months)`, deceased) ~ cluster, data = survival_df)
+ggsurvplot(fit, data=survival_df, pval = T)
+```
+
+##Expression Analysis
+
+Exploratory Analysis and Visualization
+```{r}
+#Prepare RNA data for visualization and DE
+RNAseq_matrix = as.matrix(RNAseq_filtered)
+RNAseq_matrix <- RNAseq_matrix[rowSums(RNAseq_matrix)>1,]
+```
+
+```{r}
+#Heat map of euclidean distances between Patients
+sampleDists = dist(t(RNAseq_matrix),upper = TRUE)
+annot_col = data.frame(cluster[,1])
+row.names(annot_col) <- rownames(cluster)
+
+sampleDistMatrix = as.matrix( sampleDists )
+rownames(sampleDistMatrix) = substr(colnames(RNAseq_filtered), 1, 12)
+colnames(sampleDistMatrix) = substr(colnames(RNAseq_filtered), 1, 12)
+
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,
+         clustering_distance_cols = sampleDists,
+         cluster_rows=FALSE, show_rownames=TRUE,
+         cluster_cols=TRUE,
+         annotation_col=annot_col)
+```
+
+```{r}
+#PCA Plot
+pca_res <- prcomp(t(RNAseq_matrix), scale. = TRUE)
+score <- pca_res$x
+
+score = as.data.frame(score)
+head(score)
+score$color <- as.factor(cluster$`cutree(res$tree_col, k = 2)`)
+
+
+ggplot(score, aes(x=PC1, y=PC2,  color=color)) + 
+  geom_point(size = 4)
+```
+
+Differential Expression Analysis
+```{r}
+colnames(cluster)[colnames(cluster) == "cutree(res$tree_col, k = 2)"] <- "cluster_no."
+rownames(cluster) <- substr(rownames(cluster), 1, 12)
+order_in_RNAseq <- match(rownames(cluster), colnames(RNAseq_matrix))
+RNAseq_matrix_reordered <- RNAseq_matrix[, order_in_RNAseq]
+dds = DESeqDataSetFromMatrix(countData=RNAseq_matrix_reordered,
+                              colData=cluster,
+                              design=~cluster_no.)
+dds = DESeq(dds)
+```
+
+```{r}
+#Results normalization and gene annotation
+res <- results(dds)
+res.05 <- results(dds, alpha = 0.05)
+resSig <- subset(res, padj < 0.05)
+head(resSig[ order( resSig$log2FoldChange ), ])
+ntd <- normTransform(dds)
+vsd <- vst(dds)
+rownames(res) <- substr(rownames(res), 1, 15)
+res$symbol = mapIds(org.Hs.eg.db,
+                    keys=row.names(res), 
+                    column="SYMBOL",
+                    keytype="ENSEMBL",
+                    multiVals="first")
+res$entrez = mapIds(org.Hs.eg.db,
+                    keys=row.names(res), 
+                    column="ENTREZID",
+                    keytype="ENSEMBL",
+                    multiVals="first")
+res$name =   mapIds(org.Hs.eg.db,
+                    keys=row.names(res), 
+                    column="GENENAME",
+                    keytype="ENSEMBL",
+                    multiVals="first")
+```
+
+```{r}
+#Heat map of top 10 up regulated and down regulated genes against clusters
+upGenes <- order(resSig$log2FoldChange, decreasing = TRUE)[1:10]
+downGenes <- order(resSig$log2FoldChange, decreasing = FALSE)[1:10]
+all.genes <- c(upGenes, downGenes)
+
+annot_col = data.frame(cluster$cluster_no.)
+row.names(annot_col) <- rownames(cluster)
+
+sampleMatrix <- assay(vsd)[all.genes,]
+
+rownames(sampleMatrix) = substr(rownames(RNAseq_matrix_reordered[all.genes,]), 1, 15)
+colnames(sampleMatrix) = colnames(RNAseq_matrix_reordered)
+hugo.genes <- as.data.frame(res$symbol)
+matching_genes <- match(rownames(sampleMatrix), rownames(hugo.genes))
+
+
+for(i in 1:nrow(sampleMatrix)){
+  rownames(sampleMatrix)[i] <- hugo.genes$`res$symbol`[matching_genes[i]]
+}
+
+
+pheatmap(sampleMatrix , cluster_rows=FALSE, show_rownames=TRUE, show_colnames = FALSE,
+         cluster_cols=TRUE, annotation_col=annot_col)
+```
+
+Pathway Analysis
+```{r}
+#Pathway Analysis Setup
+data(kegg.sets.hs)
+data(sigmet.idx.hs)
+kegg.sets.hs = kegg.sets.hs[sigmet.idx.hs]
+foldchanges = res$log2FoldChange
+names(foldchanges) = res$entrez
+keggres = gage(foldchanges, gsets=kegg.sets.hs)
+```
+
+```{r}
+#Pathway Analysis
+head(keggres$greater)
+head(keggres$less)
+```
+```{r}
+#Getting Pathviews
+keggrespathways <- rownames(keggres$less)[1:5]
+keggresids = substr(keggrespathways, start=1, stop=8)
+keggresids
+pathview(gene.data=foldchanges, pathway.id=keggresids, species="hsa")
 ```
