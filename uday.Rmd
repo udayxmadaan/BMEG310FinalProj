@@ -168,9 +168,9 @@ sorted_indices <- order(row_sums, decreasing = TRUE)
 matSort <- mat[sorted_indices, ]
 matSort2 =  rowSums(matSort)
 
-num = 200
+num = 10
 barplot(t(matSort2[1:num]), beside = TRUE, legend.text = rownames(matSort2[1:num]),
-        main = "Number of Patients with Mutations in Gene", xlab = "Categories", ylab = "Values")
+        main = "Number of Patients with a Mutation in Each Gene", xlab = "Genes", ylab = "Number of Patients")
 ```
 
 ```{r}
@@ -205,15 +205,12 @@ ggsurvplot(fit, data=survival_df, pval = T)
 ```{r}
 # CLINICAL ANALYSIS
 
-# hypothesis males over 60 are more likely to have renal cell cancer
-#HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Male" & data_clinical_patient_filtered$V5[6:359] > 60 )
-#HypothesisRows = which(data_clinical_patient_filtered$V6[6:359] == "Female")
-#HypothesisRows = HypothesisRows + 5
-#clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
+# insert clinical hypothesis for survival analysis
+HypothesisRows = which(data_clinical_patient_filtered$`Genetic Ancestry Label`[6:359] == "AFR" | data_clinical_patient_filtered$`Genetic Ancestry Label`[6:359] == "AFR_ADMIX" )
 
-#rows = which(substr(data_mutations_filtered$Tumor_Sample_Barcode, 1, 12) %in% unique(clinicalHypothesis$V1))
+HypothesisRows = HypothesisRows + 5
+clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
 
-#mutationHypothesis = data_mutations_filtered[rows,]
 
 
 # just for gene _______
