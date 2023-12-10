@@ -194,7 +194,7 @@ colnames(sampleDistMatrix) = substr(colnames(RNAseq_filtered), 1, 12)
 pheatmap(sampleDistMatrix,
          clustering_distance_rows = sampleDists,
          clustering_distance_cols = sampleDists,
-         cluster_rows=FALSE, show_rownames=TRUE,
+         cluster_rows=FALSE, show_rownames=FALSE, show_colnames = FALSE, 
          cluster_cols=TRUE,
          annotation_col=annot_col)
 ```
