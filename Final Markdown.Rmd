@@ -25,7 +25,7 @@ library("gage")
 library("gageData")
 ```
 
-####Import Data
+#### Import Data
 ```{r}
 data_clinical_patient = read.csv("data_clinical_patient.txt", sep = '\t', 
                                  header = FALSE)
@@ -33,7 +33,7 @@ data_mutations = read.csv("data_mutations.txt", sep = '\t', header = TRUE)
 RNAseq = read.csv("RNAseq_KIRC.csv", sep = ',', header = FALSE)
 ```
 
-####Get Common Patients
+#### Get Common Patients
 ```{r}
 clinicalPatients = unique(data_clinical_patient[6:nrow(data_clinical_patient),
                                                 1])
@@ -50,7 +50,7 @@ commonPatients <- Reduce(intersect, list(clinicalPatients, mutationPatients,
                                          RNApatients))
 ```
 
-####Filtering
+#### Filtering
 ```{r}
 # Filter data mutations to keep the common patient IDs
 data_mutations_filtered <- data_mutations[sapply(
@@ -89,9 +89,9 @@ data_clinical_patient_filtered=data_clinical_patient[rows_to_keep,]
 ```
 
 
-##Clinical Analysis
+## Clinical Analysis
 
-####Clinical hypotheses 
+#### Clinical hypotheses 
 ```{r}
 
 # insert clinical hypothesis for survival analysis
@@ -108,7 +108,8 @@ mutationHypothesis = data_mutations_filtered[mutationRows,]
 clinicalFilteredCrop = data_clinical_patient_filtered[6:359,]
 colnames(clinicalFilteredCrop) = data_clinical_patient_filtered[5,]
 clinicalFilteredCrop$deceased = clinicalFilteredCrop$OS_STATUS == "1:DECEASED"
-clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$DAYS_LAST_FOLLOWUP)/30
+clinicalFilteredCrop$Months_to_last_follow_up =
+  as.numeric(clinicalFilteredCrop$DAYS_LAST_FOLLOWUP)/30
 
 
 # identify which patients are in the hypothesis group
@@ -123,19 +124,22 @@ clinicalFilteredCrop = clinicalFilteredCrop[rows,]
 
 # make time numeric
 clinicalFilteredCrop$OS_MONTHS = as.numeric(clinicalFilteredCrop$OS_MONTHS)
-clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$Months_to_last_follow_up)
+clinicalFilteredCrop$Months_to_last_follow_up = 
+  as.numeric(clinicalFilteredCrop$Months_to_last_follow_up)
 
 # do the survival analysis plot
 clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == TRUE,
                                    clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$Months_to_last_follow_up)
 fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop)
-ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Hypothesis"))
+ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", 
+           title = "Survival Analysis", legend.title = "Groups:", 
+           legend.labs = c("Other", "Hypothesis"))
 
 ```
 
 ## Mutation Analysis
 
-####Most Mutated Genes
+#### Most Mutated Genes
 ```{r}
 hugo <- as.data.frame(table(data_mutations_filtered$Hugo_Symbol))
 hugo.ordered <- hugo[order(-hugo$Freq),]
@@ -146,7 +150,7 @@ ggplot(data=hugo.ordered[1:15,], aes(x=Var1, y=Freq))+
   labs(x="Gene", y="Frequency", title="Top 15 Mutated Genes")
 ```
 
-####Oncomat Matrix
+#### Oncomat Matrix
 ```{r}
 cnv_events = unique(data_mutations_filtered$Variant_Classification)
 cnv_events
@@ -192,7 +196,7 @@ mat <- as.matrix(mat)
 rownames(mat)  <-  row.names(oncomat.ordered)
 ```
 
-####Gene Mutation Survival Analysis
+#### Specific Gene Mutation Survival Analysis
 ```{r}
 # Test gene survival analysis
 #pick gene
@@ -213,20 +217,24 @@ clinicalFilteredCrop = clinicalFilteredCrop[rows,]
 
 # make time numeric
 clinicalFilteredCrop$OS_MONTHS = as.numeric(clinicalFilteredCrop$OS_MONTHS)
-clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$Months_to_last_follow_up)
+clinicalFilteredCrop$Months_to_last_follow_up = 
+  as.numeric(clinicalFilteredCrop$Months_to_last_follow_up)
 
 # do the survival analysis plot
 clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == TRUE,
                                    clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$Months_to_last_follow_up)
 
 
-fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop)
+fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , 
+              data=clinicalFilteredCrop)
 print(fit)
-ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Hypothesis"))
+ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", 
+           title = "Survival Analysis", legend.title = "Groups:", 
+           legend.labs = c("Other", "Hypothesis"))
 ```
 
 
-####Heat Map for top 5 Mutated Genes
+#### Heat Map for top 5 Mutated Genes
 ```{r}
 reduce.mat <- mat[1:5,]
 res <- pheatmap(reduce.mat,
@@ -234,7 +242,7 @@ res <- pheatmap(reduce.mat,
          show_colnames=FALSE)
 ```
 
-####Survival Analysis
+#### Survival Analysis
 ```{r}
 cluster <-  as.data.frame(cutree(res$tree_col, k = 2))
 colnames(data_clinical_patient_filtered) <- data_clinical_patient_filtered[1, ]
@@ -252,9 +260,9 @@ fit <- survfit(Surv(`Overall Survival (Months)`, deceased) ~ cluster, data = sur
 ggsurvplot(fit, data=survival_df, pval = T)
 ```
 
-##Expression Analysis
+## Expression Analysis
 
-####Exploratory Analysis and Visualization
+#### Exploratory Analysis and Visualization
 ```{r}
 #Prepare RNA data for visualization and DE
 RNAseq_matrix = as.matrix(RNAseq_filtered)
@@ -293,7 +301,7 @@ ggplot(score, aes(x=PC1, y=PC2,  color=color)) +
   geom_point(size = 4)
 ```
 
-####Differential Expression Analysis
+#### Differential Expression Analysis
 ```{r}
 colnames(cluster)[colnames(cluster) == "cutree(res$tree_col, k = 2)"] <- "cluster_no."
 rownames(cluster) <- substr(rownames(cluster), 1, 12)
@@ -356,7 +364,7 @@ pheatmap(sampleMatrix , cluster_rows=FALSE, show_rownames=TRUE, show_colnames = 
          cluster_cols=TRUE, annotation_col=annot_col)
 ```
 
-####Pathway Analysis
+#### Pathway Analysis
 ```{r}
 #Pathway Analysis Setup
 data(kegg.sets.hs)
