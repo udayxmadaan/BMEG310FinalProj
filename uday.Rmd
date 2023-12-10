@@ -175,7 +175,7 @@ barplot(t(matSort2[1:num]), beside = TRUE, legend.text = rownames(matSort2[1:num
 
 ```{r}
 
-reduce.mat <- matSort[1:15,]
+reduce.mat <- matSort[1:5,]
 res <- pheatmap(reduce.mat,
          cluster_rows = F,
          show_colnames=FALSE)
@@ -211,12 +211,8 @@ HypothesisRows = which(data_clinical_patient_filtered$`Genetic Ancestry Label`[6
 HypothesisRows = HypothesisRows + 5
 clinicalHypothesis = data_clinical_patient_filtered[HypothesisRows,]
 
-
-
-# just for gene _______
-rowsgene = which(data_mutations_filtered$Hugo_Symbol == "PBRM1")
-mutationHypothesis = data_mutations_filtered[rowsgene, ]
-# just for gene survival ___
+mutationRows = which(substr(data_mutations_filtered$Tumor_Sample_Barcode,1,12) %in% clinicalHypothesis$`#Patient Identifier`)
+mutationHypothesis = data_mutations_filtered[mutationRows,]
 
 # create the mutation matrix and cluster
 cnv_events = unique(mutationHypothesis$Variant_Classification)
@@ -258,7 +254,7 @@ mat = oncomat
 
 
 mat[mat!=""]=1
-mat[mat=="" | mat=="Frame_Shift_Del" | mat=="5'UTR"]=0
+mat[mat=="" | mat=="Silent"]=0
 
 
 mat <- apply(mat, 2 ,as.numeric)
@@ -288,44 +284,109 @@ clinicalFilteredCrop$deceased = clinicalFilteredCrop$OS_STATUS == "1:DECEASED"
 clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$DAYS_LAST_FOLLOWUP)/30
 
 
-
-
 # identify which patients are in the hypothesis group
-clinicalHypothesisIDs = clinicalHypothesis$V1
+clinicalHypothesisIDs = clinicalHypothesis$`#Patient Identifier`
 rowsMatchID = which(clinicalFilteredCrop$PATIENT_ID %in% clinicalHypothesisIDs)
 clinicalFilteredCrop$HypothesisGroup = numeric(length(clinicalFilteredCrop$PATIENT_ID))
 clinicalFilteredCrop$HypothesisGroup[rowsMatchID] = 1
 
+#remove NAs
+rows = which(is.na(clinicalFilteredCrop$Months_to_last_follow_up) == FALSE)
+clinicalFilteredCrop = clinicalFilteredCrop[rows,]
 
-
-# ensure the null sample size is equal to alternative
-set.seed(20) 
-# Find the indices of 0s and 1s
-zero_indices <- which(clinicalFilteredCrop$HypothesisGroup == 0 &  is.na(clinicalFilteredCrop$Months_to_last_follow_up) == FALSE)
-one_indices <- which(clinicalFilteredCrop$HypothesisGroup == 1 & is.na(clinicalFilteredCrop$Months_to_last_follow_up) == FALSE)
-print(length(zero_indices))
-print(length(one_indices))
-#keep a certain number of non 
-if (length(zero_indices) > length(one_indices)){
-random_zero_indices <- sample(zero_indices, length(one_indices), replace = FALSE)
-random_one_indices = one_indices
-}else if(length(zero_indices) < length(one_indices)){
-  random_one_indices <- sample(one_indices, length(zero_indices), replace = FALSE)
-  random_zero_indices = zero_indices
-}else{
-  random_one_indices = one_indices
-  random_zero_indices = zero_indices
-  
-}
-# Combine the indices of 0s and 1s to keep
-indices_to_keep <- c(random_one_indices, random_zero_indices)
-
+# make time numeric
+clinicalFilteredCrop$OS_MONTHS = as.numeric(clinicalFilteredCrop$OS_MONTHS)
+clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$Months_to_last_follow_up)
 
 # do the survival analysis plot
-clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == "Dead",
+clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == TRUE,
                                    clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$Months_to_last_follow_up)
 
-fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop[indices_to_keep,])
+
+
+
+
+fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop)
+print(fit)
+ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Hypothesis"))
+
+```
+
+
+```{r}
+# make the normal mutation matrix
+cnv_events = unique(data_mutations_filtered$Variant_Classification)
+oncomat = reshape2::dcast(
+  data = data_mutations_filtered,
+  formula = Hugo_Symbol ~ Tumor_Sample_Barcode,
+  fun.aggregate = function(x, cnv = cnv_events) {
+    x = as.character(x) # >= 2 same/distinct variant classification = Multi_Hit
+    xad = x[x %in% cnv]
+    xvc = x[!x %in% cnv]
+    
+    if (length(xvc) > 0) {
+      xvc = ifelse(test = length(xvc) > 1,
+                   yes = 'Multi_Hit',
+                   no = xvc)
+    }
+    
+    x = ifelse(
+      test = length(xad) > 0,
+      yes = paste(xad, xvc, sep = ';'),
+      no = xvc
+    )
+    x = gsub(pattern = ';$',
+             replacement = '',
+             x = x)
+    x = gsub(pattern = '^;',
+             replacement = '',
+             x = x)
+    return(x)
+  },
+  value.var = 'Variant_Classification',
+  fill = '',
+  drop = FALSE
+)
+rownames(oncomat) = oncomat$Hugo_Symbol
+oncomat <- oncomat[,-1]
+oncomat.ordered <- oncomat[order(-hugo$Freq),]
+mat <- oncomat.ordered
+mat[mat=="Missense_Mutation" ]="1"
+mat[mat != "1"] = 0
+
+mat <- as.matrix(mat)
+mat <- apply(mat, 2 ,as.numeric)
+
+rownames(mat)  <-  row.names(oncomat.ordered)
+
+
+# Test gene survival analysis
+#pick gene
+mutationCluster = mat[which(rownames(mat) == "LRP2"),]
+
+#turn to df
+mutationCluster = data.frame(mutationCluster)
+
+# match clustering from mutation to clinical data
+mutationCluster$RowNames <- substr(row.names(mutationCluster),1,12)
+matched_rows <- match(clinicalFilteredCrop$PATIENT_ID, mutationCluster$RowNames)
+clinicalFilteredCrop$HypothesisGroup <- mutationCluster$mutationCluster[matched_rows]
+
+
+#remove NAs
+rows = which(is.na(clinicalFilteredCrop$Months_to_last_follow_up) == FALSE)
+clinicalFilteredCrop = clinicalFilteredCrop[rows,]
+
+# make time numeric
+clinicalFilteredCrop$OS_MONTHS = as.numeric(clinicalFilteredCrop$OS_MONTHS)
+clinicalFilteredCrop$Months_to_last_follow_up = as.numeric(clinicalFilteredCrop$Months_to_last_follow_up)
+
+# do the survival analysis plot
+clinicalFilteredCrop$overall_survival = ifelse(clinicalFilteredCrop$deceased == TRUE,
+                                   clinicalFilteredCrop$OS_MONTHS, clinicalFilteredCrop$Months_to_last_follow_up)
+
+
+fit = survfit(Surv(overall_survival, deceased) ~ HypothesisGroup , data=clinicalFilteredCrop)
 print(fit)
 ggsurvplot(fit, data=clinicalFilteredCrop, pval = T, xlab = "Time (Months)", title = "Survival Analysis", legend.title = "Groups:", legend.labs = c("Other", "Hypothesis"))
 
